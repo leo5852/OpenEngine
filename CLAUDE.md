@@ -34,11 +34,16 @@ There are no configured lint or test targets/frameworks in this project (no test
 
 ### Collision system
 
-`Collider` (`include/collider.h`) defines an `AABB` struct with static `checkCollision`, and a `ColliderType` enum (`Box`, `Sphere` — sphere is declared but unimplemented in `sphereCollider.h`). `BoxCollider` (`include/boxCollider.h`) computes a world-space AABB from an object's position + collider offset/size.
+`Collider` (`include/collider.h`) defines an `AABB` struct with static `checkCollision`, an `OBB` struct (center, 3 world-space axes, half size), and a `ColliderType` enum (`Box`, `Sphere` — sphere is declared but unimplemented in `sphereCollider.h`). `BoxCollider` (`include/boxCollider.h`) computes a world-space OBB from an object's position + `rotation` (quaternion on `GameObject`) + collider offset/size, plus the AABB enclosing that OBB.
+
+Rotation lives in `GameObject::rotation`, not in `RenderableObject::localMatrix` (which holds scale only); `draw()` builds `translate(position) * mat4_cast(rotation) * localMatrix`, so render and collider always agree.
 
 `CollisionSystem` (`include/collisionSystem.h`, `src/collisionSystem.cpp`) does brute-force O(n²) pairwise checks across all registered objects each `update()`:
 - Skips pairs where either object has no collider, or where both are static.
-- Computes an MTV via `getBoxVSBoxMTV` (least-overlap-axis resolution along whichever of x/y/z has the smallest penetration).
+- Computes an MTV via `getBoxVSBoxMTV`: enclosing-AABB broad phase, then SAT over the 15 OBB candidate axes (3+3 face normals, 9 edge cross products); the MTV is along the least-overlap axis, so it is generally not axis-aligned.
+- Velocity response (`resolveVelocity`): contact points are the corners of each box inside the other (fallback: midpoint of the two support points for edge-edge contacts). A sequential-impulse solver (`SOLVER_ITERATIONS`, accumulated clamping) applies normal impulses and Coulomb friction per contact, updating `velocity` and `angularVelocity` with a box inertia tensor. Off-center impulses create spin, so a box landing on a corner tips onto a face. No restitution (no bounce).
+- Position response: `GameObject::onCollision(mtv)` only moves `position` and sets `isGrounded` when the MTV normal's y > `GROUND_NORMAL_MIN_Y`.
+- `GameObject::update` integrates `velocity` and world-space `angularVelocity` for all non-static objects. `Player` sets `freezeRotation = true` (zero inverse inertia) so the camera never tilts.
 - Splits the MTV 50/50 between two dynamic objects, or applies it fully to whichever one is dynamic when the other is static, then calls `onCollision(mtv)` on the affected object(s).
 
 Objects must be registered explicitly via `collisionSystem.registerObject(&obj)` (done in `main.cpp`); there is no automatic registration on construction.

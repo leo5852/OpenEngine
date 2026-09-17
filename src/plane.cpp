@@ -10,14 +10,13 @@ glm::vec4 planeVertices[4] = {
     | \ |
     3---2
     */
-};
+}; 
 
 //TODO: substitute programID param
 Plane::Plane(unsigned int programID){
     isStatic = true;
-    // 콜라이더 두께를 1.0으로 잡되, offset을 -size.y/2만큼 내려서
+    // 콜라이더 두께를 1.0으로 잡되, offset을 -size.y/2만큼 내려서 
     // 콜라이더의 윗면은 항상 렌더링되는 평면(position.y)과 정확히 맞닿게 한다.
-    // (얇은 콜라이더는 빠르게 낙하하는 오브젝트가 한 프레임에 뚫고 지나갈 수 있음)
     setCollider(new BoxCollider(glm::vec3(1.0f, 1.0f, 1.0f)));
     collider->offset = glm::vec3(0.0f, -0.5f, 0.0f);
 
