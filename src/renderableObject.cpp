@@ -33,8 +33,8 @@ void RenderableObject::setupMesh(unsigned int programID, const std::vector<glm::
 }
 
 void RenderableObject::draw() {
-    // 이동은 position에서, 회전/크기는 localMatrix에서 가져와 매 프레임 조립
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), this->position) * this->localMatrix;
+    // 이동은 position, 회전은 rotation, 크기는 localMatrix에서 가져와 매 프레임 조립
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), this->position) * glm::mat4_cast(this->rotation) * this->localMatrix;
     glUniformMatrix4fv(this->modelLoc, 1, GL_FALSE, &model[0][0]);
 
     glBindVertexArray(this->vao);
@@ -47,5 +47,6 @@ void RenderableObject::translate(glm::vec3 vec) {
 }
 
 void RenderableObject::rotate(glm::vec3 axis, float elapsedTime) {
-    this->localMatrix = glm::rotate(this->localMatrix, elapsedTime, axis);
+    // 기존 glm::rotate(localMatrix, ...)와 같은 곱셈 순서 (오브젝트 로컬 축 기준 회전)
+    this->rotation = glm::normalize(this->rotation * glm::angleAxis(elapsedTime, glm::normalize(axis)));
 }

@@ -110,11 +110,19 @@ int main() {
     floor.scale(glm::vec3(30.0f, 1.0f, 30.0f));
     floor.translate(glm::vec3(0.0f, -1.0f, 0.0f));
 
-    // 중력이 적용되는 dynamic 오브젝트 예시: 공중에서 떨어져 바닥에 착지한다
     Cube& fallingCube = scene.spawn<Cube>(shader.programID);
     fallingCube.isStatic = false;
     fallingCube.useGravity = true;
     fallingCube.translate(glm::vec3(-2.0f, 5.0f, 0.0f));
+    // 비스듬히 기울여서 떨어뜨림: AABB가 아니라 실제 기울어진 모양(OBB)대로 바닥에 닿는다
+    fallingCube.rotate(glm::vec3(1.0f, 1.0f, 1.0f), glm::radians(60.0f));
+
+    Cube& fallingCube2 = scene.spawn<Cube>(shader.programID);
+    fallingCube2.isStatic = false;
+    fallingCube2.useGravity = true;
+    fallingCube2.translate(glm::vec3(-1.0f, 10.0f, 0.0f));
+    // 비스듬히 기울여서 떨어뜨림: AABB가 아니라 실제 기울어진 모양(OBB)대로 바닥에 닿는다
+    fallingCube2.rotate(glm::vec3(0.0f, 1.0f, 1.0f), glm::radians(45.0f));
 
     collisionSystem.registerObject(&player); //player는 별개로 취급
     //=====================================================================
@@ -143,6 +151,7 @@ int main() {
         // 2. calculate physics and collisions
         player.update(deltaTime);
         scene.update(deltaTime);
+        
         collisionSystem.update();
         
         // 3. calculate view matrix

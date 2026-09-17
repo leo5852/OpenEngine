@@ -18,8 +18,9 @@ public:
     void translate(glm::vec3 vec);
     void rotate(glm::vec3 axis, float elapsedTime);
 
-    // localMatrix는 rotation/scale만 반영하고, position은 따로 유지 
-    // 최종 Model Matrix은 draw()에서 translate(position) * localMatrix로 조립한다.
+    // localMatrix는 scale만 반영하고, 회전은 GameObject::rotation, 이동은 position에서 따로 유지
+    // (콜라이더가 회전을 알아야 하므로 회전을 행렬 안에 섞지 않는다)
+    // 최종 Model Matrix은 draw()에서 translate(position) * rotation * localMatrix로 조립
     glm::mat4 localMatrix = glm::mat4(1.0f);
 
 protected:
