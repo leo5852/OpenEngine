@@ -3,6 +3,13 @@
 #include <Jolt/RegisterTypes.h>
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Physics/PhysicsSettings.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+
+#include "gameObject.h"
+#include "boxCollider.h"
+#include "joltConversions.h"
 
 #include <cstdarg>
 #include <cstdio>
@@ -92,6 +99,51 @@ void PhysicsWorld::optimizeBroadPhase() {
 
 JPH::BodyInterface& PhysicsWorld::getBodyInterface() {
     return physicsSystem->GetBodyInterface();
+}
+
+JPH::BodyID PhysicsWorld::addBody(const GameObject& obj) {
+    if (!initialized || !obj.collider || obj.collider->type != ColliderType::Box)
+        return JPH::BodyID(); // 아직 Box만 지원 (Sphere 콜라이더는 미구현)
+
+    // 콜라이더 -> Jolt 모양. BoxShape는 전체 크기가 아니라 절반 크기를 받는다
+    const BoxCollider& box = static_cast<const BoxCollider&>(*obj.collider);
+    JPH::RefConst<JPH::Shape> shape = new JPH::BoxShape(toJolt(box.size * 0.5f));
+
+    // 콜라이더가 오브젝트 중심에서 벗어나 있으면(예: Plane) 모양 자체를 그만큼 옮긴다.
+    // 이렇게 하면 body 위치와 GameObject.position이 항상 같은 값이 된다
+    if (box.offset != glm::vec3(0.0f))
+        shape = new JPH::RotatedTranslatedShape(toJolt(box.offset), JPH::Quat::sIdentity(), shape);
+
+    JPH::BodyCreationSettings settings(shape, toJolt(obj.position), toJolt(obj.rotation),
+        obj.isStatic ? JPH::EMotionType::Static : JPH::EMotionType::Dynamic,
+        obj.isStatic ? Layers::NON_MOVING : Layers::MOVING);
+    settings.mFriction = obj.friction;
+    settings.mGravityFactor = obj.useGravity ? 1.0f : 0.0f;
+
+    if (!obj.isStatic) {
+        // 질량은 GameObject 값을 쓰고, 관성(얼마나 쉽게 도는지)은 모양에 맞춰 Jolt가 계산한다
+        settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+        settings.mMassPropertiesOverride.mMass = obj.mass;
+    }
+
+    return physicsSystem->GetBodyInterface().CreateAndAddBody(settings,
+        obj.isStatic ? JPH::EActivation::DontActivate : JPH::EActivation::Activate);
+}
+
+void PhysicsWorld::removeBody(JPH::BodyID id) {
+    if (!initialized || id.IsInvalid()) return;
+
+    JPH::BodyInterface& bodyInterface = physicsSystem->GetBodyInterface();
+    bodyInterface.RemoveBody(id);
+    bodyInterface.DestroyBody(id);
+}
+
+void PhysicsWorld::getTransform(JPH::BodyID id, glm::vec3& outPosition, glm::quat& outRotation) {
+    JPH::RVec3 position;
+    JPH::Quat rotation;
+    physicsSystem->GetBodyInterface().GetPositionAndRotation(id, position, rotation);
+    outPosition = toGlm(position);
+    outRotation = toGlm(rotation);
 }
 
 // 생성의 역순으로 정리한다

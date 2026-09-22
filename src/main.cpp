@@ -15,7 +15,6 @@
 #include <shader.h>
 #include <cube.h>
 #include <plane.h>
-#include <collisionSystem.h>
 #include <scene.h>
 #include <physicsWorld.h>
 
@@ -54,9 +53,7 @@ Shader shader;
 GLuint vao;
 // Player
 Player player;
-// Collision system
-CollisionSystem collisionSystem;
-// Jolt 물리 세계 (아직 물체는 등록하지 않고 초기화/정리만 확인하는 단계)
+// Jolt 물리 세계
 PhysicsWorld physicsWorld;
 // Matrix transformation
 //GLuint pvmMatrixID; //removed to calculate in shader
@@ -102,9 +99,10 @@ int main() {
     init();
 
     physicsWorld.init();
+    player.createCharacter(physicsWorld);
 
     //======================= Generate Game Objects =======================
-    Scene scene(collisionSystem);
+    Scene scene(physicsWorld);
 
     scene.spawn<Cube>(shader.programID);
 
@@ -129,7 +127,6 @@ int main() {
     // 비스듬히 기울여서 떨어뜨림: AABB가 아니라 실제 기울어진 모양(OBB)대로 바닥에 닿는다
     fallingCube2.rotate(glm::vec3(0.0f, 1.0f, 1.0f), glm::radians(45.0f));
 
-    collisionSystem.registerObject(&player); //player는 별개로 취급
     //=====================================================================
 
     // lastFrame이 0으로 초기화된 채면, 셰이더 컴파일/오브젝트 생성 등 여기까지 걸린 시간이
@@ -154,11 +151,9 @@ int main() {
         processInput(window);
         
         // 2. calculate physics and collisions
-        player.update(deltaTime);
-        scene.update(deltaTime);
-        
-        collisionSystem.update();
-        physicsWorld.update(deltaTime); // 아직 등록된 물체가 없어서 빈 계산만 돈다
+        player.updateCharacter(deltaTime, physicsWorld); // 입력 -> 캐릭터 이동/충돌 (Jolt CharacterVirtual)
+        scene.updatePhysics(deltaTime);                  // body 생성 -> 물리 진행 -> 결과를 position/rotation에 반영
+        scene.update(deltaTime);                         // 오브젝트별 게임 로직 훅
         
         // 3. calculate view matrix
         viewMat = glm::lookAt(player.position + player.cameraOffset, 
@@ -182,6 +177,9 @@ int main() {
         glfwSwapBuffers(window);
     }
 
+    // 물리 세계를 정리하기 전에 캐릭터와 body를 먼저 모두 제거한다
+    player.destroyCharacter();
+    scene.removeAllBodies();
     physicsWorld.shutdown();
     glfwTerminate();
     return 0;
@@ -214,25 +212,22 @@ void mainLoopEvent(){
 // processInput() 
 // Keyboard process function
 void processInput(GLFWwindow* window){
-    float cameraSpeed = player.moveSpeed * deltaTime;
     float rotateSpeed = player.rotateSpeed * deltaTime;
     
     glm::vec3 flatFront = player.cameraFront;
     flatFront.y = 0.0f; 
     flatFront = glm::normalize(flatFront);
 
-    // W
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        player.position += cameraSpeed * flatFront;
-    // S
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        player.position -= cameraSpeed * flatFront;
-    // A
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        player.position -= cameraSpeed * glm::normalize(glm::cross(flatFront, player.cameraUp));
-    // D
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        player.position += cameraSpeed * glm::normalize(glm::cross(flatFront, player.cameraUp));
+    // WASD: 이번 프레임에 움직일 방향만 모아서 캐릭터에 넘긴다 (실제 이동과 충돌은 Jolt가 처리)
+    glm::vec3 right = glm::normalize(glm::cross(flatFront, player.cameraUp));
+    glm::vec3 move(0.0f);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) move += flatFront;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) move -= flatFront;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) move -= right;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) move += right;
+    // 대각선으로 눌러도 빨라지지 않게 정규화
+    if (glm::length(move) > 0.0f) move = glm::normalize(move);
+    player.setMoveInput(move);
     // Q
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
         player.cameraFront = glm::rotate(flatFront, rotateSpeed, player.cameraUp);

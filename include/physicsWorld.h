@@ -10,6 +10,11 @@
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+
+class GameObject;
+
 // 오브젝트 레이어: 무엇과 무엇이 충돌할지 결정한다
 namespace Layers {
     static constexpr JPH::ObjectLayer NON_MOVING = 0;  // 움직이지 않는 것 (바닥, 벽)
@@ -100,8 +105,17 @@ public:
     // 정적 물체를 다 만든 뒤 한 번 호출하면 브로드페이즈 트리가 최적화된다
     void optimizeBroadPhase();
 
+    // GameObject의 콜라이더/위치/회전/isStatic/useGravity/mass/friction으로 body를 만들어 월드에 추가한다
+    // 지원하지 않는 콜라이더(Sphere 등)면 유효하지 않은 BodyID를 반환한다
+    JPH::BodyID addBody(const GameObject& obj);
+    // 월드에서 빼고(Remove) 메모리를 해제한다(Destroy). shutdown 이후에 불려도 안전하다
+    void removeBody(JPH::BodyID id);
+    // body의 현재 위치/회전을 읽어온다
+    void getTransform(JPH::BodyID id, glm::vec3& outPosition, glm::quat& outRotation);
+
     JPH::BodyInterface& getBodyInterface();
     JPH::PhysicsSystem& getSystem() { return *physicsSystem; }
+    JPH::TempAllocator& getTempAllocator() { return *tempAllocator; }
 
 private:
     JPH::PhysicsSystem* physicsSystem = nullptr;

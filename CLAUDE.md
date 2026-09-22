@@ -4,13 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-OpenEngine is a minimal 3D engine/game built in C++17 on OpenGL (GLEW + GLFW + GLM), for Windows/MSVC. There is no engine editor or scene file format — game objects are constructed and wired up directly in `src/main.cpp`.
+OpenEngine is a minimal 3D engine/game built in C++17 on OpenGL (GLEW + GLFW + GLM), for Windows/MSVC. Physics and collision are handled by [Jolt Physics](https://github.com/jrouwe/JoltPhysics). There is no engine editor or scene file format — game objects are constructed and wired up directly in `src/main.cpp`.
 
 ## Build
 
 The project uses CMake with Ninja as the generator, building with MSVC (cl.exe) on Windows.
 
 ```powershell
+# Jolt is a git submodule — required after a fresh clone
+git submodule update --init --recursive
+
 # configure (first time / after CMakeLists.txt changes)
 cmake -B build -G Ninja
 
@@ -23,34 +26,52 @@ cmake --build build
 
 There are no configured lint or test targets/frameworks in this project (no test runner, no `ctest` targets).
 
+**Header changes are not tracked by ninja in this setup** (the MSVC `/showIncludes` prefix is localized to Korean and doesn't match `msvc_deps_prefix`). After editing a header — especially one that changes a class layout, like `gameObject.h` — delete the engine's objects so every TU recompiles: remove `build\CMakeFiles\OpenEngine.dir\src\*.obj` (by explicit path). Avoid `--clean-first`, which also rebuilds all of Jolt (several minutes).
+
+Files containing Korean comments must be saved as **UTF-8 with BOM**; `/utf-8` does not reach the generated build, so MSVC otherwise reads them as CP949 (warning C4819, and a comment can swallow the next line).
+
+### Jolt integration (`CMakeLists.txt`)
+
+Jolt is added via `add_subdirectory(dependencies/JoltPhysics/Build)` and linked as the `Jolt` target, which exports its include path and `JPH_*` defines as PUBLIC — never add `JPH_*` defines by hand (a mismatch aborts at `RegisterTypes()`). Three options must be set before `add_subdirectory` or linking fails with LNK2038:
+- `USE_STATIC_MSVC_RUNTIME_LIBRARY OFF` — match the dynamic runtime (`/MD`) used by the engine and GLFW.
+- `OVERRIDE_CXX_FLAGS OFF` — otherwise Jolt replaces `CMAKE_CXX_FLAGS_DEBUG/RELEASE`, dropping `/MDd` so Jolt compiles with the default `/MT`.
+- `CPP_RTTI_ENABLED ON` — MSVC defaults to `/GR`; Jolt defaults to `/GR-`.
+
 ## Architecture
 
 ### Object model
 
-`GameObject` (`include/gameObject.h`) is the base class for everything placed in the world: it owns a `position`, a `Collider*`, an `isStatic` flag, and an `onCollision(mtv)` virtual hook that by default just applies the minimum translation vector (MTV) to `position`. `Player`, `Cube`, and `Plane` all derive from it.
+`GameObject` (`include/gameObject.h`) is the base class for everything placed in the world: `position`, `rotation` (quaternion), a `Collider*` shape description, `isStatic`, the Jolt body-creation parameters (`useGravity`, `mass`, `friction`), and a `JPH::BodyID bodyID`. `update(dt)` is an empty per-object game-logic hook; movement and collision are Jolt's job.
 
-- `Player` (`include/player.h`, `src/player.cpp`) — the only dynamic (non-static) object by default. Holds camera state (`cameraOffset`/`cameraFront`/`cameraUp`), applies gravity each frame in `update(dt)`, and overrides `onCollision` to zero out vertical velocity and set grounded state when hitting floors/ceilings.
-- `Cube` / `Plane` (`include/cube.h`, `include/plane.h` + `.cpp`) — static renderable primitives. Each owns its own VAO/VBO, builds interleaved position+color vertex data, and exposes `translate`/`rotate`/`scale` that mutate both the render `modelMatrix` and the physics `position`/collider size in lockstep (see `Plane::scale`, which resizes the `BoxCollider` to match visual scale).
+- `Collider` / `BoxCollider` (`include/collider.h`, `include/boxCollider.h`) are **shape descriptions only** (type, `offset`, `size`) — they contain no collision logic. `ColliderType::Sphere` exists but `sphereCollider.h` is an empty stub and `PhysicsWorld::addBody` only supports boxes.
+- `Cube` / `Plane` (`include/cube.h`, `include/plane.h` + `.cpp`) derive from `RenderableObject` (owns VAO/VBO, `draw()`), build interleaved position+color vertex data, and default to `isStatic = true`. `Plane::scale` resizes the `BoxCollider` to match the visual scale; the plane's collider is 1 unit thick with `offset.y = -0.5` so its top face sits at the rendered plane.
+- `RenderableObject::draw()` builds `translate(position) * mat4_cast(rotation) * localMatrix`; `localMatrix` holds scale only.
+- `Player` (`include/player.h`, `src/player.cpp`) is a `JPH::CharacterVirtual` (capsule, radius 0.3, height 1.0) whose origin is the feet; the camera sits at `position + cameraOffset`. It is not in `Scene` and has no `Collider`.
 
-### Collision system
+### Physics (Jolt)
 
-`Collider` (`include/collider.h`) defines an `AABB` struct with static `checkCollision`, an `OBB` struct (center, 3 world-space axes, half size), and a `ColliderType` enum (`Box`, `Sphere` — sphere is declared but unimplemented in `sphereCollider.h`). `BoxCollider` (`include/boxCollider.h`) computes a world-space OBB from an object's position + `rotation` (quaternion on `GameObject`) + collider offset/size, plus the AABB enclosing that OBB.
+`PhysicsWorld` (`include/physicsWorld.h`, `src/physicsWorld.cpp`) wraps Jolt:
+- Two object layers (`Layers::NON_MOVING`, `Layers::MOVING`) mapped 1:1 to broad-phase layers; static-vs-static pairs never collide. The three required layer interfaces live in the header. `GetBroadPhaseLayerName` must be implemented because the profiler is on in Debug/Release.
+- `init()` order is fixed: `RegisterDefaultAllocator` → `Factory` → `RegisterTypes` → temp allocator → job system → `PhysicsSystem` (held by pointer so it's constructed after the allocator is registered). `shutdown()` reverses it.
+- `update(dt)` accumulates frame time and steps Jolt at a fixed 60 Hz (clamped to 0.25 s of backlog).
+- `addBody(const GameObject&)` turns a `BoxCollider` into a `BoxShape` (**half extents** = `size / 2`), wraps it in a `RotatedTranslatedShape` when `offset != 0` so the body origin always equals `GameObject::position`, and maps `isStatic` → Static/NON_MOVING vs Dynamic/MOVING, `useGravity` → gravity factor, `mass` → mass override, `friction` → friction.
 
-Rotation lives in `GameObject::rotation`, not in `RenderableObject::localMatrix` (which holds scale only); `draw()` builds `translate(position) * mat4_cast(rotation) * localMatrix`, so render and collider always agree.
+`include/joltConversions.h` converts GLM ↔ Jolt. **Quaternion component order differs**: GLM's constructor is `(w, x, y, z)`, Jolt's is `(x, y, z, w)`.
 
-`CollisionSystem` (`include/collisionSystem.h`, `src/collisionSystem.cpp`) does brute-force O(n²) pairwise checks across all registered objects each `update()`:
-- Skips pairs where either object has no collider, or where both are static.
-- Computes an MTV via `getBoxVSBoxMTV`: enclosing-AABB broad phase, then SAT over the 15 OBB candidate axes (3+3 face normals, 9 edge cross products); the MTV is along the least-overlap axis, so it is generally not axis-aligned.
-- Velocity response (`resolveVelocity`): contact points are the corners of each box inside the other (fallback: midpoint of the two support points for edge-edge contacts). A sequential-impulse solver (`SOLVER_ITERATIONS`, accumulated clamping) applies normal impulses and Coulomb friction per contact, updating `velocity` and `angularVelocity` with a box inertia tensor. Off-center impulses create spin, so a box landing on a corner tips onto a face. No restitution (no bounce).
-- Position response: `GameObject::onCollision(mtv)` only moves `position` and sets `isGrounded` when the MTV normal's y > `GROUND_NORMAL_MIN_Y`.
-- `GameObject::update` integrates `velocity` and world-space `angularVelocity` for all non-static objects. `Player` sets `freezeRotation = true` (zero inverse inertia) so the camera never tilts.
-- Splits the MTV 50/50 between two dynamic objects, or applies it fully to whichever one is dynamic when the other is static, then calls `onCollision(mtv)` on the affected object(s).
+`Scene` (`include/scene.h`) owns renderable objects and their bodies:
+- `spawn<T>()` does **not** create a body. `updatePhysics(dt)` creates bodies lazily for objects that have a collider but no body, so settings applied after `spawn` (`isStatic`, `translate`, `rotate`, `scale`) are respected. After a body exists, changing those fields has no effect on Jolt.
+- `updatePhysics` then steps `PhysicsWorld` and copies each dynamic body's transform back into `position`/`rotation`. `OptimizeBroadPhase` runs only when new static bodies were added.
+- `destroy()` removes the object's body; `removeAllBodies()` must be called before `PhysicsWorld::shutdown()`.
 
-Objects must be registered explicitly via `collisionSystem.registerObject(&obj)` (done in `main.cpp`); there is no automatic registration on construction.
+`Player`:
+- `createCharacter()` after `PhysicsWorld::init()`; `destroyCharacter()` before shutdown (the character owns an inner rigid body registered in the world — that inner body is what lets falling bodies collide with the player).
+- Input only sets `setMoveInput()` / `jump()`; `updateCharacter(dt, world)` converts them to a velocity (following Jolt's `CharacterVirtualTest`), runs `ExtendedUpdate` (stair stepping, stick-to-floor, pushing bodies), and copies the result to `position`.
+
+Test scenes: avoid perfectly symmetric drop orientations (e.g. 60° about the (1,1,1) diagonal) when checking tumbling — a box can come to rest balanced on an edge and Jolt puts it to sleep there.
 
 ### Rendering / main loop
 
-`src/main.cpp` is the entry point and owns the GLFW window, input callbacks, and the frame loop. Per frame it: processes input → advances physics (`player.update(dt)`, `collisionSystem.update()`) → recomputes the view matrix from the player's camera state → clears the framebuffer → uploads model/view/projection uniforms → draws each object → polls/swaps.
+`src/main.cpp` owns the GLFW window, input callbacks, and the frame loop. Per frame: `processInput` → `player.updateCharacter` → `scene.updatePhysics` → `scene.update` → view matrix from the player's camera → clear → upload MVP uniforms → `scene.draw()` → poll/swap. On exit: `player.destroyCharacter()` → `scene.removeAllBodies()` → `physicsWorld.shutdown()`.
 
 `Shader` (`include/shader.h`, header-only) compiles/links `src/vShader.glsl` and `src/fShader.glsl` from source at startup; CMake copies both `.glsl` files into the build directory, and `main.cpp` loads them via the relative path `"../src/vShader.glsl"` — the executable is expected to be run with its working directory set to `build/`.
 
@@ -58,6 +79,6 @@ Objects must be registered explicitly via `collisionSystem.registerObject(&obj)`
 
 ### Third-party dependencies
 
-`dependencies/` vendors GLFW 3.4, GLEW 2.1.0, and GLM source trees directly (added via `add_subdirectory`/`include_directories` in `CMakeLists.txt`). Treat these as read-only vendored code, not part of the engine.
+`dependencies/` vendors GLFW 3.4, GLEW 2.1.0, and GLM source trees directly, plus Jolt Physics v5.6.0 as a **git submodule** (`dependencies/JoltPhysics`). Treat all of these as read-only.
 
 Note: many comments and log messages in the codebase are written in Korean.

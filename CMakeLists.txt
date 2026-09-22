@@ -56,7 +56,6 @@ add_executable (OpenEngine
   src/renderableObject.cpp
   src/cube.cpp
   src/plane.cpp
-  src/collisionSystem.cpp
   src/wireframe.cpp
   src/physicsWorld.cpp
 
@@ -69,10 +68,10 @@ add_executable (OpenEngine
   include/collider.h
   include/boxCollider.h
   include/sphereCollider.h
-  include/collisionSystem.h
   include/gameObject.h
   include/wireframe.h
   include/physicsWorld.h
+  include/joltConversions.h
   )
 
 # link libraries

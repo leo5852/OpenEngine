@@ -6,7 +6,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 #include "gameObject.h"
-#include "collisionSystem.h"
 
 class Wireframe {
 public:
