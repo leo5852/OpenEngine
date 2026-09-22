@@ -17,6 +17,7 @@
 #include <plane.h>
 #include <collisionSystem.h>
 #include <scene.h>
+#include <physicsWorld.h>
 
 #define BORDER_LEFT 0
 #define BORDER_RIGHT 1280
@@ -55,6 +56,8 @@ GLuint vao;
 Player player;
 // Collision system
 CollisionSystem collisionSystem;
+// Jolt 물리 세계 (아직 물체는 등록하지 않고 초기화/정리만 확인하는 단계)
+PhysicsWorld physicsWorld;
 // Matrix transformation
 //GLuint pvmMatrixID; //removed to calculate in shader
 glm::mat4 modelMat;
@@ -97,6 +100,8 @@ int main() {
     shader.use();
 
     init();
+
+    physicsWorld.init();
 
     //======================= Generate Game Objects =======================
     Scene scene(collisionSystem);
@@ -153,6 +158,7 @@ int main() {
         scene.update(deltaTime);
         
         collisionSystem.update();
+        physicsWorld.update(deltaTime); // 아직 등록된 물체가 없어서 빈 계산만 돈다
         
         // 3. calculate view matrix
         viewMat = glm::lookAt(player.position + player.cameraOffset, 
@@ -176,6 +182,7 @@ int main() {
         glfwSwapBuffers(window);
     }
 
+    physicsWorld.shutdown();
     glfwTerminate();
     return 0;
 }

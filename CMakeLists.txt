@@ -58,6 +58,7 @@ add_executable (OpenEngine
   src/plane.cpp
   src/collisionSystem.cpp
   src/wireframe.cpp
+  src/physicsWorld.cpp
 
   include/player.h
   include/renderableObject.h
@@ -71,6 +72,7 @@ add_executable (OpenEngine
   include/collisionSystem.h
   include/gameObject.h
   include/wireframe.h
+  include/physicsWorld.h
   )
 
 # link libraries
