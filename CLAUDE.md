@@ -14,19 +14,23 @@ The project uses CMake with Ninja as the generator, building with MSVC (cl.exe) 
 # Jolt is a git submodule — required after a fresh clone
 git submodule update --init --recursive
 
-# configure (first time / after CMakeLists.txt changes)
-cmake -B build -G Ninja
+# configure (first time) — presets live in CMakePresets.json
+cmake --preset debug      # -> build/          (Debug)
+cmake --preset release    # -> build-release/  (Release)
 
 # build
-cmake --build build
+cmake --build --preset debug
+cmake --build --preset release
 
-# run (from build/, so relative shader paths resolve — see Shaders below)
-.\build\OpenEngine.exe
+# run from inside the build folder, so the relative shader paths resolve — see Shaders below
+cd build; .\OpenEngine.exe
 ```
+
+Both folders are single-config Ninja: **the folder decides the build type** (`--config` is ignored). VS Code's CMake Tools uses the same presets — kits are disabled when `CMakePresets.json` exists; pick the configure/build preset in the CMake panel or status bar. `cl.exe` comes from the VS developer environment (vcvars64); the `architecture`/`toolset` entries with `"strategy": "external"` tell CMake Tools to set that up. Do not add `CMAKE_C/CXX_COMPILER` to the presets: a value that differs textually from the cached full path makes CMake wipe the cache.
 
 There are no configured lint or test targets/frameworks in this project (no test runner, no `ctest` targets).
 
-**Header changes are not tracked by ninja in this setup** (the MSVC `/showIncludes` prefix is localized to Korean and doesn't match `msvc_deps_prefix`). After editing a header — especially one that changes a class layout, like `gameObject.h` — delete the engine's objects so every TU recompiles: remove `build\CMakeFiles\OpenEngine.dir\src\*.obj` (by explicit path). Avoid `--clean-first`, which also rebuilds all of Jolt (several minutes).
+**Header changes are not tracked by ninja in this setup** (the MSVC `/showIncludes` prefix is localized to Korean and doesn't match `msvc_deps_prefix`). After editing a header — especially one that changes a class layout, like `gameObject.h` — delete the engine's objects so every TU recompiles: remove `<build folder>\CMakeFiles\OpenEngine.dir\src\*.obj` (by explicit path) in **each** build folder you use. Avoid `--clean-first`, which also rebuilds all of Jolt (several minutes).
 
 Files containing Korean comments must be saved as **UTF-8 with BOM**; `/utf-8` does not reach the generated build, so MSVC otherwise reads them as CP949 (warning C4819, and a comment can swallow the next line).
 
