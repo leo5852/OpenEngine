@@ -24,8 +24,8 @@ Player::Player(glm::vec3 pos){
 void Player::createCharacter(PhysicsWorld& world) {
     JPH::Ref<JPH::CharacterVirtualSettings> settings = new JPH::CharacterVirtualSettings();
     settings->mShape = makeCharacterShape(1.0f);
-    settings->mMaxSlopeAngle = JPH::DegreesToRadians(45.0f);                 // 이보다 가파른 경사는 오를 수 없다
-    settings->mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -RADIUS);  // 캡슐 아래쪽 반구에 닿은 것만 바닥으로 본다
+    settings->mMaxSlopeAngle = JPH::DegreesToRadians(maxSlopeAngle); // 등반 가능 각도 설정
+    settings->mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -RADIUS);  // 캡슐 아래쪽 반구에 닿도록 설정
 
     // inner body: 다른 물체들이 캐릭터와 부딪힐 수 있게 해주는 몸체.
     // CharacterVirtual 자체는 Jolt 세계에 등록되지 않아서, 이게 없으면 떨어지는 큐브가 플레이어를 통과한다.

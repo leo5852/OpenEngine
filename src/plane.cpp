@@ -31,7 +31,7 @@ Plane::Plane(unsigned int programID){
 }
 
 void Plane::scale(glm::vec3 factor) {
-    this->localMatrix = glm::scale(this->localMatrix, factor);
+    this->mScale = glm::scale(this->mScale, factor);
     static_cast<BoxCollider*>(this->collider)->size *= factor;
 }
 

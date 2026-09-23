@@ -34,7 +34,7 @@ void RenderableObject::setupMesh(unsigned int programID, const std::vector<glm::
 
 void RenderableObject::draw() {
     // 이동은 position, 회전은 rotation, 크기는 localMatrix에서 가져와 매 프레임 조립
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), this->position) * glm::mat4_cast(this->rotation) * this->localMatrix;
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), this->position) * glm::mat4_cast(this->rotation) * this->mScale;
     glUniformMatrix4fv(this->modelLoc, 1, GL_FALSE, &model[0][0]);
 
     glBindVertexArray(this->vao);
