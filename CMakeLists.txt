@@ -54,6 +54,7 @@ add_executable (OpenEngine
   src/main.cpp
   src/player.cpp
   src/renderableObject.cpp
+  src/shader.cpp
   src/cube.cpp
   src/plane.cpp
   src/wireframe.cpp
@@ -62,6 +63,7 @@ add_executable (OpenEngine
   include/player.h
   include/renderableObject.h
   include/scene.h
+  include/shader.h
   include/cube.h
   include/plane.h
   # include/aabb.h

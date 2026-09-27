@@ -164,11 +164,10 @@ int main() {
         glClearColor(CLEAR_COLOR);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             
-        // 5. set MVP matrices
-        // TODO: use fixed location for MVP uniforms and delete these lines
-        glUniformMatrix4fv(glGetUniformLocation(shader.programID, "model"), 1, GL_FALSE, &modelMat[0][0]);
-        glUniformMatrix4fv(glGetUniformLocation(shader.programID, "view"), 1, GL_FALSE, &viewMat[0][0]);
-        glUniformMatrix4fv(glGetUniformLocation(shader.programID, "projection"), 1, GL_FALSE, &projectMat[0][0]);
+        // 5. set view/projection matrices
+        // model 행렬은 오브젝트마다 RenderableObject::draw()에서 따로 설정
+        shader.setUniform("view", viewMat);
+        shader.setUniform("projection", projectMat);
 
         // 6. the actual drawing part
         scene.draw();
