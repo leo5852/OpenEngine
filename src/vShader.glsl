@@ -5,20 +5,20 @@ layout(location = 1) in vec4 vColor;
 layout(location = 2) in vec3 vNormal;
 
 out vec4 color;
-out vec3 fragPos;    // 월드 좌표
-out vec3 fragNormal; // 월드 기준 법선
+out vec3 fragPos; // view space
+out vec3 fragNormal; // world space
 
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
 
 void main() {
-    vec4 worldPos = model * vPosition;
-    gl_Position = projection * view * worldPos;
+    vec4 viewPos = view * model * vPosition;
+    gl_Position = projection * viewPos;
 
-    fragPos = vec3(worldPos);
+    fragPos = viewPos.xyz;
 
-    // use inverse & transposed matrix for normals(affine transformation could change normal) 
+    // use inverse & transposed matrix for normals(affine transformation can affect normal) 
     fragNormal = normalize(mat3(transpose(inverse(model))) * vNormal);
 
     color = vColor;

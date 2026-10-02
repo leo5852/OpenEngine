@@ -102,6 +102,12 @@ int main() {
     player.createCharacter(physicsWorld);
 
     //======================= Generate Game Objects =======================
+    
+    //Light Setting
+    glm::vec4 lightPos = glm::vec4(3.0f, 5.0f, 0.0f, 1.0f);
+    shader.setUniform("Light.L", glm::vec3(0.5f, 0.5f, 0.5f));
+    shader.setUniform("Light.La", glm::vec3(0.2f, 0.2f, 0.2f));
+    
     Scene scene(physicsWorld);
 
     scene.spawn<Cube>(shader.programID);
@@ -130,11 +136,11 @@ int main() {
     //=====================================================================
 
     // lastFrame이 0으로 초기화된 채면, 셰이더 컴파일/오브젝트 생성 등 여기까지 걸린 시간이
-    // 전부 첫 프레임의 deltaTime으로 들어가서 중력이 한 번에 크게 튀는 문제가 있었다.
+    // 전부 첫 프레임의 deltaTime으로 들어가서 중력이 한 번에 크게 튀는 문제가 있음.
     // 루프 진입 직전에 다시 맞춰준다.
     lastFrame = (float)glfwGetTime();
 
-    // The main loop
+    // THE MAIN LOOP
     while(!glfwWindowShouldClose(window))
     {
         // delta time calculation
@@ -168,6 +174,9 @@ int main() {
         // model 행렬은 오브젝트마다 RenderableObject::draw()에서 따로 설정
         shader.setUniform("view", viewMat);
         shader.setUniform("projection", projectMat);
+
+        // 5-2. set new Light position in eye perspective
+        shader.setUniform("Light.Position", viewMat * lightPos);
 
         // 6. the actual drawing part
         scene.draw();
