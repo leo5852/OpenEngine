@@ -5,7 +5,18 @@ RenderableObject::~RenderableObject() {
     if (vao) glDeleteVertexArrays(1, &vao);
 }
 
-void RenderableObject::setupMesh(unsigned int programID, const std::vector<glm::vec4>& points, const std::vector<glm::vec4>& colors) {
+// vShader.glsl의 layout(location = ...)과 같은 값.
+// glGetAttribLocation을 쓰면, 셰이더가 안 쓰는 속성을 컴파일러가 제거했을 때 -1이 돌아와서
+// GLuint로 변환되며 GL 에러가 난다. 위치를 양쪽에 고정해두면 그 문제가 없다
+static constexpr GLuint ATTRIB_POSITION = 0;
+static constexpr GLuint ATTRIB_COLOR    = 1;
+static constexpr GLuint ATTRIB_NORMAL   = 2;
+
+void RenderableObject::setupMesh(
+    unsigned int programID,
+    const std::vector<glm::vec4>& points,
+    const std::vector<glm::vec4>& colors,
+    const std::vector<glm::vec3>& normals) {
     this->modelLoc = glGetUniformLocation(programID, "model");
     this->vertexCount = (int)points.size();
 
@@ -15,19 +26,25 @@ void RenderableObject::setupMesh(unsigned int programID, const std::vector<glm::
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
+    // 한 버퍼에 [위치들][색들][법선들] 순서로 이어 붙인다
     size_t pointsBytes = points.size() * sizeof(glm::vec4);
     size_t colorsBytes = colors.size() * sizeof(glm::vec4);
-    glBufferData(GL_ARRAY_BUFFER, pointsBytes + colorsBytes, NULL, GL_STATIC_DRAW);
+    size_t normalsBytes = normals.size() * sizeof(glm::vec3);
+
+    glBufferData(GL_ARRAY_BUFFER, pointsBytes + colorsBytes + normalsBytes, NULL, GL_STATIC_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, 0, pointsBytes, points.data());
     glBufferSubData(GL_ARRAY_BUFFER, pointsBytes, colorsBytes, colors.data());
+    glBufferSubData(GL_ARRAY_BUFFER, pointsBytes + colorsBytes, normalsBytes, normals.data());
 
-    GLuint vPosition = glGetAttribLocation(programID, "vPosition");
-    glEnableVertexAttribArray(vPosition);
-    glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+    // 각 속성이 버퍼의 어디서 시작하는지 알려준다 (stride 0 = 빈틈없이 이어진 배열)
+    glEnableVertexAttribArray(ATTRIB_POSITION);
+    glVertexAttribPointer(ATTRIB_POSITION, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 
-    GLuint vColor = glGetAttribLocation(programID, "vColor");
-    glEnableVertexAttribArray(vColor);
-    glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid*)pointsBytes);
+    glEnableVertexAttribArray(ATTRIB_COLOR);
+    glVertexAttribPointer(ATTRIB_COLOR, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid*)pointsBytes);
+
+    glEnableVertexAttribArray(ATTRIB_NORMAL);
+    glVertexAttribPointer(ATTRIB_NORMAL, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)(pointsBytes + colorsBytes));
 
     glBindVertexArray(0);
 }

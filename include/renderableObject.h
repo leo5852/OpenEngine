@@ -24,8 +24,12 @@ public:
     glm::mat4 mScale = glm::mat4(1.0f);
 
 protected:
-    // interleaved position+color 정점 데이터를 업로드하고 vao/vbo/attrib를 설정한다.
-    void setupMesh(unsigned int programID, const std::vector<glm::vec4>& points, const std::vector<glm::vec4>& colors);
+    // position+color+normal 정점 데이터를 한 버퍼에 이어 붙여 업로드하고 vao/vbo/attrib를 설정한다.
+    // 법선은 셰이더의 in vec3 vNormal에 맞춰 vec3로 받는다 (vec4로 두면 stride를 따로 지정해야 한다)
+    void setupMesh(unsigned int programID,
+                   const std::vector<glm::vec4>& points,
+                   const std::vector<glm::vec4>& colors,
+                   const std::vector<glm::vec3>& normals);
 
     unsigned int modelLoc = 0; // model uniform 위치
 
