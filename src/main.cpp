@@ -15,8 +15,8 @@
 #include <shader.h>
 #include <cube.h>
 #include <plane.h>
-#include <collisionSystem.h>
 #include <scene.h>
+#include <physicsWorld.h>
 
 #define BORDER_LEFT 0
 #define BORDER_RIGHT 1280
@@ -29,6 +29,8 @@
 
 #define CLEAR_COLOR 0.31f, 0.73f, 0.87f, 0.0f
 #define CAMERA_SPEED 2.5f
+
+#define MAX_DELTA_TIME 0.1f
 
 using namespace std;
 
@@ -53,8 +55,8 @@ Shader shader;
 GLuint vao;
 // Player
 Player player;
-// Collision system
-CollisionSystem collisionSystem;
+// Jolt 물리 세계
+PhysicsWorld physicsWorld;
 // Matrix transformation
 //GLuint pvmMatrixID; //removed to calculate in shader
 glm::mat4 modelMat;
@@ -93,14 +95,32 @@ int main() {
     glfwSetScrollCallback(window, scroll_callback);
 
     // Load and link shaders into program and use it
+    shader.addToDefine("MAX_LIGHTS", MAX_LIGHTS); // should be injected before shader.setup()
     shader.setup("../src/vShader.glsl", "../src/fShader.glsl");
     shader.use();
 
     init();
 
-    //======================= Generate Game Objects =======================
-    Scene scene(collisionSystem);
+    physicsWorld.init();
+    player.createCharacter(physicsWorld);
 
+    //======================= Generate Game Objects =======================
+    
+    Scene scene(physicsWorld);
+    
+    // Light Settings
+    // ambient is set once
+    scene.setAmbient(glm::vec3(0.2f));
+    // individual lights
+    scene.addLight({ glm::vec4(3.0f, 5.0f, 0.0f, 1.0f), glm::vec3(0.5f) });
+
+
+    // Material (지금은 모든 오브젝트가 같은 값을 공유한다)
+    // TODO: 나중엔 object마다 다른 material 사용 가능하게
+    shader.setUniform("Material.Ks", glm::vec3(0.5f));
+    shader.setUniform("Material.Shininess", 128.0f);
+
+    //=== spawn & initialize game objects ===
     scene.spawn<Cube>(shader.programID);
 
     Cube& cube2 = scene.spawn<Cube>(shader.programID);
@@ -123,16 +143,16 @@ int main() {
     fallingCube2.translate(glm::vec3(-1.0f, 10.0f, 0.0f));
     // 비스듬히 기울여서 떨어뜨림: AABB가 아니라 실제 기울어진 모양(OBB)대로 바닥에 닿는다
     fallingCube2.rotate(glm::vec3(0.0f, 1.0f, 1.0f), glm::radians(45.0f));
+    // =========================================
 
-    collisionSystem.registerObject(&player); //player는 별개로 취급
     //=====================================================================
 
     // lastFrame이 0으로 초기화된 채면, 셰이더 컴파일/오브젝트 생성 등 여기까지 걸린 시간이
-    // 전부 첫 프레임의 deltaTime으로 들어가서 중력이 한 번에 크게 튀는 문제가 있었다.
+    // 전부 첫 프레임의 deltaTime으로 들어가서 중력이 한 번에 크게 튀는 문제가 있음.
     // 루프 진입 직전에 다시 맞춰준다.
     lastFrame = (float)glfwGetTime();
 
-    // The main loop
+    // =========================THE MAIN LOOP=========================
     while(!glfwWindowShouldClose(window))
     {
         // delta time calculation
@@ -142,17 +162,15 @@ int main() {
 
         // 창을 드래그하거나 브레이크포인트 등으로 프레임이 멈췄다 재개되는 경우를 대비해
         // 한 프레임에 물리가 너무 크게 튀지 않도록 delta time 상한을 둔다.
-        const float MAX_DELTA_TIME = 0.1f;
         if (deltaTime > MAX_DELTA_TIME) deltaTime = MAX_DELTA_TIME;
 
         // 1. proccess inputs
         processInput(window);
         
         // 2. calculate physics and collisions
-        player.update(deltaTime);
-        scene.update(deltaTime);
-        
-        collisionSystem.update();
+        player.updateCharacter(deltaTime, physicsWorld); // 입력 -> 캐릭터 이동/충돌 (Jolt CharacterVirtual)
+        scene.updatePhysics(deltaTime);                  // body 생성 -> 물리 진행 -> 결과를 position/rotation에 반영
+        scene.update(deltaTime);                         // 오브젝트별 게임 로직 훅
         
         // 3. calculate view matrix
         viewMat = glm::lookAt(player.position + player.cameraOffset, 
@@ -163,11 +181,13 @@ int main() {
         glClearColor(CLEAR_COLOR);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             
-        // 5. set MVP matrices
-        // TODO: use fixed location for MVP uniforms and delete these lines
-        glUniformMatrix4fv(glGetUniformLocation(shader.programID, "model"), 1, GL_FALSE, &modelMat[0][0]);
-        glUniformMatrix4fv(glGetUniformLocation(shader.programID, "view"), 1, GL_FALSE, &viewMat[0][0]);
-        glUniformMatrix4fv(glGetUniformLocation(shader.programID, "projection"), 1, GL_FALSE, &projectMat[0][0]);
+        // 5-1. set view/projection matrices
+        // model 행렬은 오브젝트마다 RenderableObject::draw()에서 따로 설정
+        shader.setUniform("view", viewMat);
+        shader.setUniform("projection", projectMat);
+
+        // 5-2. 광원 위치를 View Space로 바꿔서 올린다 (LightCount도 함께 설정됨)
+        scene.uploadLights(shader, viewMat);
 
         // 6. the actual drawing part
         scene.draw();
@@ -176,10 +196,14 @@ int main() {
         glfwSwapBuffers(window);
     }
 
+    // 물리 세계를 정리하기 전에 캐릭터와 body를 먼저 모두 제거한다
+    player.destroyCharacter();
+    scene.removeAllBodies();
+    physicsWorld.shutdown();
     glfwTerminate();
     return 0;
 }
-////////////////////////////////////////////////////////////
+//===========================================================================
 
 // initialize function
 void init(){
@@ -207,25 +231,22 @@ void mainLoopEvent(){
 // processInput() 
 // Keyboard process function
 void processInput(GLFWwindow* window){
-    float cameraSpeed = player.moveSpeed * deltaTime;
     float rotateSpeed = player.rotateSpeed * deltaTime;
     
     glm::vec3 flatFront = player.cameraFront;
     flatFront.y = 0.0f; 
     flatFront = glm::normalize(flatFront);
 
-    // W
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        player.position += cameraSpeed * flatFront;
-    // S
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        player.position -= cameraSpeed * flatFront;
-    // A
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        player.position -= cameraSpeed * glm::normalize(glm::cross(flatFront, player.cameraUp));
-    // D
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        player.position += cameraSpeed * glm::normalize(glm::cross(flatFront, player.cameraUp));
+    // WASD: 이번 프레임에 움직일 방향만 모아서 캐릭터에 넘긴다 (실제 이동과 충돌은 Jolt가 처리)
+    glm::vec3 right = glm::normalize(glm::cross(flatFront, player.cameraUp));
+    glm::vec3 move(0.0f);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) move += flatFront;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) move -= flatFront;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) move -= right;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) move += right;
+    // 대각선으로 눌러도 빨라지지 않게 정규화
+    if (glm::length(move) > 0.0f) move = glm::normalize(move);
+    player.setMoveInput(move);
     // Q
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
         player.cameraFront = glm::rotate(flatFront, rotateSpeed, player.cameraUp);

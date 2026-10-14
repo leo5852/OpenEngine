@@ -18,14 +18,18 @@ public:
     void translate(glm::vec3 vec);
     void rotate(glm::vec3 axis, float elapsedTime);
 
-    // localMatrix는 scale만 반영하고, 회전은 GameObject::rotation, 이동은 position에서 따로 유지
+    // mScale은 scale만 반영하고, 회전은 GameObject::rotation, 이동은 position에서 따로 유지
     // (콜라이더가 회전을 알아야 하므로 회전을 행렬 안에 섞지 않는다)
-    // 최종 Model Matrix은 draw()에서 translate(position) * rotation * localMatrix로 조립
-    glm::mat4 localMatrix = glm::mat4(1.0f);
+    // 최종 Model Matrix은 draw()에서 translate(position) * rotation * mScale로 조립
+    glm::mat4 mScale = glm::mat4(1.0f);
 
 protected:
-    // interleaved position+color 정점 데이터를 업로드하고 vao/vbo/attrib를 설정한다.
-    void setupMesh(unsigned int programID, const std::vector<glm::vec4>& points, const std::vector<glm::vec4>& colors);
+    // position+color+normal 정점 데이터를 한 버퍼에 이어 붙여 업로드하고 vao/vbo/attrib를 설정한다.
+    // 법선은 셰이더의 in vec3 vNormal에 맞춰 vec3로 받는다 (vec4로 두면 stride를 따로 지정해야 한다)
+    void setupMesh(unsigned int programID,
+                   const std::vector<glm::vec4>& points,
+                   const std::vector<glm::vec4>& colors,
+                   const std::vector<glm::vec3>& normals);
 
     unsigned int modelLoc = 0; // model uniform 위치
 

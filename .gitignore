@@ -1,5 +1,6 @@
 # 1. 빌드 폴더 및 결과물 제외
 build/
+build-release
 bin/
 *.exe
 *.obj
