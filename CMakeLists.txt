@@ -74,6 +74,7 @@ add_executable (OpenEngine
   include/wireframe.h
   include/physicsWorld.h
   include/joltConversions.h
+  include/light.h
   )
 
 # link libraries

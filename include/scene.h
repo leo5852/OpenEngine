@@ -3,18 +3,21 @@
 
 #include <vector>
 #include <memory>
+#include <iostream>
 #include <algorithm>
 #include <type_traits>
 #include <utility>
 
 #include "renderableObject.h"
 #include "physicsWorld.h"
+#include "light.h"
 
 // 렌더링되는 월드 오브젝트(Cube, Plane 등)의 소유, Jolt body 생성/해제, draw를 한 곳에서 관리
 // spawn()으로 한 번에 생성하도록
 class Scene {
 public:
-    Scene(PhysicsWorld& physicsWorld) : physicsWorld(physicsWorld) {}
+    Scene(PhysicsWorld& physicsWorld) : physicsWorld(physicsWorld) {
+    }
 
     // T는 RenderableObject를 상속해야 한다. 생성자 인자를 그대로 전달한다.
     template<typename T, typename... Args>
@@ -88,9 +91,33 @@ public:
         }
     }
 
+    void addLight(const Light& l){
+        // 넘겨도 uploadLights에서 조용히 잘리기 때문에, 여기서 미리 알려준다
+        if ((int)lights.size() >= MAX_LIGHTS)
+            std::cout << "WARNING: Scene::addLight - 광원이 MAX_LIGHTS(" << MAX_LIGHTS << ")개를 넘어 무시됩니다.\n";
+
+        lights.push_back(l);
+    }
+
+    void setAmbient(const glm::vec3& a){ ambient = a; }
+
+    // 조명 관련 uniform(Ambient, Lights[], LightCount)은 전부 여기서만 올림.
+    // Shader는 uniform 이름을 모르는 범용 클래스로 유지
+    void uploadLights(Shader& shader, const glm::mat4& view) {
+        shader.setUniform("Ambient", ambient);
+
+        int count = std::min((int)lights.size(), MAX_LIGHTS); 
+        for (int i = 0; i < count; i++)
+            uploadLight(shader, lights[i], view, i);
+        
+        shader.setUniform("LightCount", count);
+    }
+
 private:
     PhysicsWorld& physicsWorld;
     std::vector<std::unique_ptr<RenderableObject>> objects;
+    std::vector<Light> lights;
+    glm::vec3 ambient = glm::vec3(0.0f); // 광원 개수와 무관
 };
 
 #endif

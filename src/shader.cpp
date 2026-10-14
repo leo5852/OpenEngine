@@ -1,5 +1,24 @@
 ﻿#include "shader.h"
 
+void Shader::addToDefine(const char* name, int value) {
+    defines += "#define " + std::string(name) + " " + std::to_string(value) + "\n";
+}
+
+// GLSL은 #version이 반드시 첫 줄이어야 하므로, 그 바로 다음 줄에 #define들을 끼워 넣는다.
+// 끝에 #line 2를 붙이는 이유: 줄을 추가한 만큼 컴파일 에러의 줄 번호가 밀리는데,
+// 이걸로 "다음 줄은 2번"이라고 알려주면 원본 파일의 줄 번호와 다시 맞는다
+static std::string InsertDefinesToShaderSource(const std::string& source, const std::string& defines) {
+    if (defines.empty()) return source;
+
+    size_t versionPos = source.find("#version");
+    if (versionPos == std::string::npos) return defines + source;
+
+    size_t lineEnd = source.find('\n', versionPos);
+    if (lineEnd == std::string::npos) return source + "\n" + defines;
+
+    return source.substr(0, lineEnd + 1) + defines + "#line 2\n" + source.substr(lineEnd + 1);
+}
+
 void Shader::setup(const char* vertexPath, const char* fragmentPath){
         // 1. Create shader object
         GLuint vShaderID = glCreateShader(GL_VERTEX_SHADER);
@@ -17,6 +36,9 @@ void Shader::setup(const char* vertexPath, const char* fragmentPath){
             std::cout << "ERROR: Can't open file name \"" << vertexPath << "\"";
             return;
         }
+        
+        vShaderCode = InsertDefinesToShaderSource(vShaderCode, defines);
+        
         char const* vShaderCodePtr = vShaderCode.c_str();
         //cout << "-- vertex shader code --\n" << vShaderCode << endl;
 
@@ -32,6 +54,9 @@ void Shader::setup(const char* vertexPath, const char* fragmentPath){
             std::cout << "ERROR: Can't open file name \"" << fragmentPath << "\"";
             return;
         }
+        
+        fShaderCode = InsertDefinesToShaderSource(fShaderCode, defines);
+        
         char const* fShaderCodePtr = fShaderCode.c_str();
         //cout << "-- fragment shader code --\n" << fShaderCode << endl;
 
@@ -89,6 +114,7 @@ void Shader::setup(const char* vertexPath, const char* fragmentPath){
         glDeleteShader(fShaderID);
 }
 
+//================== setUniform funcs ==================
 void Shader::setUniform(const char *name, float x, float y, float z) {
     GLint loc = getUniformLocation(name);
     glUniform3f(loc, x, y, z);
@@ -137,4 +163,3 @@ void Shader::setUniform(const char *name, bool val) {
     int loc = getUniformLocation(name);
     glUniform1i(loc, val);
 }
-    

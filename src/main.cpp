@@ -30,6 +30,8 @@
 #define CLEAR_COLOR 0.31f, 0.73f, 0.87f, 0.0f
 #define CAMERA_SPEED 2.5f
 
+#define MAX_DELTA_TIME 0.1f
+
 using namespace std;
 
 void init();
@@ -93,6 +95,7 @@ int main() {
     glfwSetScrollCallback(window, scroll_callback);
 
     // Load and link shaders into program and use it
+    shader.addToDefine("MAX_LIGHTS", MAX_LIGHTS); // should be injected before shader.setup()
     shader.setup("../src/vShader.glsl", "../src/fShader.glsl");
     shader.use();
 
@@ -103,13 +106,21 @@ int main() {
 
     //======================= Generate Game Objects =======================
     
-    //Light Setting
-    glm::vec4 lightPos = glm::vec4(3.0f, 5.0f, 0.0f, 1.0f);
-    shader.setUniform("Light.L", glm::vec3(0.5f, 0.5f, 0.5f));
-    shader.setUniform("Light.La", glm::vec3(0.2f, 0.2f, 0.2f));
-    
     Scene scene(physicsWorld);
+    
+    // Light Settings
+    // ambient is set once
+    scene.setAmbient(glm::vec3(0.2f));
+    // individual lights
+    scene.addLight({ glm::vec4(3.0f, 5.0f, 0.0f, 1.0f), glm::vec3(0.5f) });
 
+
+    // Material (지금은 모든 오브젝트가 같은 값을 공유한다)
+    // TODO: 나중엔 object마다 다른 material 사용 가능하게
+    shader.setUniform("Material.Ks", glm::vec3(0.5f));
+    shader.setUniform("Material.Shininess", 128.0f);
+
+    //=== spawn & initialize game objects ===
     scene.spawn<Cube>(shader.programID);
 
     Cube& cube2 = scene.spawn<Cube>(shader.programID);
@@ -132,6 +143,7 @@ int main() {
     fallingCube2.translate(glm::vec3(-1.0f, 10.0f, 0.0f));
     // 비스듬히 기울여서 떨어뜨림: AABB가 아니라 실제 기울어진 모양(OBB)대로 바닥에 닿는다
     fallingCube2.rotate(glm::vec3(0.0f, 1.0f, 1.0f), glm::radians(45.0f));
+    // =========================================
 
     //=====================================================================
 
@@ -140,7 +152,7 @@ int main() {
     // 루프 진입 직전에 다시 맞춰준다.
     lastFrame = (float)glfwGetTime();
 
-    // THE MAIN LOOP
+    // =========================THE MAIN LOOP=========================
     while(!glfwWindowShouldClose(window))
     {
         // delta time calculation
@@ -150,7 +162,6 @@ int main() {
 
         // 창을 드래그하거나 브레이크포인트 등으로 프레임이 멈췄다 재개되는 경우를 대비해
         // 한 프레임에 물리가 너무 크게 튀지 않도록 delta time 상한을 둔다.
-        const float MAX_DELTA_TIME = 0.1f;
         if (deltaTime > MAX_DELTA_TIME) deltaTime = MAX_DELTA_TIME;
 
         // 1. proccess inputs
@@ -170,13 +181,13 @@ int main() {
         glClearColor(CLEAR_COLOR);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             
-        // 5. set view/projection matrices
+        // 5-1. set view/projection matrices
         // model 행렬은 오브젝트마다 RenderableObject::draw()에서 따로 설정
         shader.setUniform("view", viewMat);
         shader.setUniform("projection", projectMat);
 
-        // 5-2. set new Light position in eye perspective
-        shader.setUniform("Light.Position", viewMat * lightPos);
+        // 5-2. 광원 위치를 View Space로 바꿔서 올린다 (LightCount도 함께 설정됨)
+        scene.uploadLights(shader, viewMat);
 
         // 6. the actual drawing part
         scene.draw();
@@ -192,7 +203,7 @@ int main() {
     glfwTerminate();
     return 0;
 }
-////////////////////////////////////////////////////////////
+//===========================================================================
 
 // initialize function
 void init(){

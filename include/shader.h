@@ -17,6 +17,10 @@ public:
     Shader(){}
     Shader(const char* vertexPath, const char* fragmentPath){this->setup(vertexPath, fragmentPath);}
     
+    // "setup() 전에" 호출해야 셰이더 소스의 #version 다음 줄에 #define으로 끼워 넣음.
+    // C++ 상수 하나를 GLSL과 공유하고 싶을 때 사용(ex. MAX_LIGHTS)
+    void addToDefine(const char* name, int value);
+
     void setup(const char* vertexPath, const char* fragmentPath);
 
     // Use the linked program
@@ -34,6 +38,7 @@ public:
     void setUniform(const char *name, GLuint val);
 
 private:
+    std::string defines; // addDefine()으로 쌓아둔 #define 줄들
     std::map<std::string, int> uniformLocations;
 
     inline GLint getUniformLocation(const char *name) 
@@ -42,7 +47,7 @@ private:
 	if (pos == uniformLocations.end()) {
 		GLint loc = glGetUniformLocation(programID, name);
         if (loc == -1)
-            std::cout << "WARNING: couldn't find uniform \"" << name << "\" . Name typo or not used in shader.\n";
+            std::cout << "WARNING: couldn't find uniform \"" << name << "\" . Name typo OR not used in shader.\n";
 		uniformLocations[name] = loc;
 		return loc;
     }

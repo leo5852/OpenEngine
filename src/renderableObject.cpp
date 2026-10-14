@@ -26,7 +26,7 @@ void RenderableObject::setupMesh(
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-    // 한 버퍼에 [위치들][색들][법선들] 순서로 이어 붙인다
+    // 한 버퍼에 [points][colors][normals] 순서로 이어붙임
     size_t pointsBytes = points.size() * sizeof(glm::vec4);
     size_t colorsBytes = colors.size() * sizeof(glm::vec4);
     size_t normalsBytes = normals.size() * sizeof(glm::vec3);

@@ -6,7 +6,7 @@ layout(location = 2) in vec3 vNormal;
 
 out vec4 color;
 out vec3 fragPos; // view space
-out vec3 fragNormal; // world space
+out vec3 fragNormal; // view space
 
 uniform mat4 model;
 uniform mat4 view;
@@ -19,7 +19,7 @@ void main() {
     fragPos = viewPos.xyz;
 
     // use inverse & transposed matrix for normals(affine transformation can affect normal) 
-    fragNormal = normalize(mat3(transpose(inverse(model))) * vNormal);
+    fragNormal = normalize(mat3(transpose(inverse(view * model))) * vNormal);
 
     color = vColor;
 }
