@@ -100,6 +100,10 @@ public:
     }
 
     void setAmbient(const glm::vec3& a){ ambient = a; }
+    const glm::vec3& getAmbient() const { return ambient; }
+
+    // 디버그 UI에서 광원 값을 직접 조정하기 위한 접근자
+    std::vector<Light>& getLights() { return lights; }
 
     // 조명 관련 uniform(Ambient, Lights[], LightCount)은 전부 여기서만 올림.
     // Shader는 uniform 이름을 모르는 범용 클래스로 유지
@@ -111,6 +115,12 @@ public:
             uploadLight(shader, lights[i], view, i);
         
         shader.setUniform("LightCount", count);
+    }
+
+    void clear() {
+        removeAllBodies();
+        objects.clear();
+        lights.clear();
     }
 
 private:

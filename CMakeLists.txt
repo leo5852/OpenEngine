@@ -60,6 +60,16 @@ add_executable (OpenEngine
   src/wireframe.cpp
   src/physicsWorld.cpp
 
+  # Dear ImGui 본체
+  src/imgui.cpp
+  src/imgui_draw.cpp
+  src/imgui_tables.cpp
+  src/imgui_widgets.cpp
+  src/imgui_demo.cpp          # ShowDemoWindow용. 필요 없어지면 빼도 된다
+  # Dear ImGui 백엔드 (창=GLFW, 렌더링=OpenGL3)
+  src/imgui_impl_glfw.cpp
+  src/imgui_impl_opengl3.cpp
+
   include/player.h
   include/renderableObject.h
   include/scene.h
@@ -75,6 +85,16 @@ add_executable (OpenEngine
   include/physicsWorld.h
   include/joltConversions.h
   include/light.h
+
+  include/imgui.h
+  include/imconfig.h
+  include/imgui_internal.h
+  include/imstb_rectpack.h
+  include/imstb_textedit.h
+  include/imstb_truetype.h
+  include/imgui_impl_glfw.h
+  include/imgui_impl_opengl3.h
+  include/imgui_impl_opengl3_loader.h
   )
 
 # link libraries
